@@ -1,194 +1,542 @@
-Description:
-  VPC With 3 subnets
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template creates a VPC with 3 public subnets each in a different availability zone
+  in the same region in the same VPC.
+  Also creates a Internet Gateway attached to the VPC.
+  Creates a public route table attached to all subnets.
+  Create a public route in the public route table with destination CIDR block 0.0.0.0/0 and internet gateway.
+  Deploys a ec2 in subnet connecting to RDS(in private subnet) and s3(private bucket)
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: VPC CIDR
+        Parameters:
+          - VpcCIDR
+      -
+        Label:
+          default: Subnets CIDR
+        Parameters:
+          - PubSub1CIDR
+          - PubSub2CIDR
+          - PubSub3CIDR
+          - PriSub1CIDR
+          - PriSub2CIDR
+          - PriSub3CIDR
+      - Label:
+          default: WebServiceAMI
+        Parameters:
+          - AMIId
+          - InstanceType
+          - SSHKeyName
+    ParameterLabels:
+      VpcCIDR:
+        default: IP range of entire VPC(CIDR)
 
 Parameters:
-
   VpcCIDR:
-    Description: VPC CIDR IP
+    Default: 10.0.0.0/16
+    Description: IP range(CIDR) for VPC
     Type: String
-    Default: 10.192.0.0/16
-
-  Subnet1CIDR:
-    Description: First Availability Zone CIDR Range
+  PubSub1CIDR:
+    Default: 10.0.1.0/24
+    Description: IP range(CIDR) for PubSub1
     Type: String
-    Default: 10.192.10.0/24
-
-  Subnet2CIDR:
-    Description: Second Availability Zone CIDR Range
+  PubSub2CIDR:
+    Default: 10.0.2.0/24
+    Description: IP range(CIDR) for PubSub2
     Type: String
-    Default: 10.192.11.0/24
-
-  Subnet3CIDR:
-    Description: Third Availability Zone CIDR Range
+  PubSub3CIDR:
+    Default: 10.0.3.0/24
+    Description: IP range(CIDR) for PubSub3
     Type: String
-    Default: 10.192.20.0/24
-
-  Region:
-    Description: Enter region.
+  PriSub1CIDR:
+    Default: 10.0.4.0/24
+    Description: IP range(CIDR) for PrivateSub1
     Type: String
-    Default: us-east-1
-
-  AMI:
-    Description: "AMI for Instance"
+  PriSub2CIDR:
+    Default: 10.0.5.0/24
+    Description: IP range(CIDR) for PrivateSub2
     Type: String
-
-  KeyName:
-    Description: "Key Name for Instance"
+  PriSub3CIDR:
+    Default: 10.0.6.0/24
+    Description: IP range(CIDR) for PrivateSub3
     Type: String
-
-
-
+  AMIId:
+    Default: ami-05eb93aa9a958d203
+    Description: ImageId of webservice-AMI. Default one is Ubuntu 22.04 LTS AMI.
+    Type: String
+  InstanceType:
+    Default: t2.micro
+    Description: Type of Ec2 being launched
+    Type: String
+  SSHKeyName:
+    Default: chandu-dev-test
+    Description: SSH key name to log into aws ec2
+    Type: String
+  S3BucketName:
+    Default: csye6225-demo-chandu
+    Description: S3 bucket required for webapp
+    Type: String
+  RDSDBName:
+    Default: csye6225
+    Description: Database name in the RDS DB
+    Type: String
+  RDSDBUserName:
+    Default: csye6225
+    Description: Database master user name in the RDS DB
+    Type: String
+  RDSDBPassword:
+    Default: csye6225
+    Description: Database master password in the RDS DB
+    Type: String
+  DBInstanceType:
+    Default: db.t3.micro
+    Description: Type of RDS DB being launched
+    Type: String
 Resources:
-  VPC:
+  VPC1:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: !Ref VpcCIDR
-      EnableDnsSupport: true
       EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-vpc
-
-  InternetGateway:
+  VPC1IGW1:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-IGW
-
-  InternetGatewayAttachment:
+          Value: !Sub ${AWS::StackName}-igw
+  VPCIGWAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      InternetGatewayId: !Ref InternetGateway
-      VpcId: !Ref VPC
-
-  PublicSubnet1:
+      VpcId: !Ref VPC1
+      InternetGatewayId: !Ref VPC1IGW1
+  PubSub1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      CidrBlock: !Ref Subnet1CIDR
+      AvailabilityZone: !Select [ 0, !GetAZs '' ] #AWS::Region
+      CidrBlock: !Ref PubSub1CIDR
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-PubSub1
-
-  PublicSubnet2:
+          Value: !Sub ${AWS::StackName}-pubsub1
+      VpcId: !Ref VPC1
+  PubSub2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs ""]
-      CidrBlock: !Ref Subnet2CIDR
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PubSub2CIDR
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-PubSub2
-
-  PublicSubnet3:
+          Value: !Sub ${AWS::StackName}-pubsub2
+      VpcId: !Ref VPC1
+  PubSub3:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      AvailabilityZone: !Select [2, !GetAZs ""]
-      CidrBlock: !Ref Subnet3CIDR
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: !Ref PubSub3CIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-pubsub3
+      VpcId: !Ref VPC1
+  PriSub1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PriSub1CIDR
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-PubSub3
-
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
+          Value: !Sub ${AWS::StackName}-prisub1
+      VpcId: !Ref VPC1
+  PriSub2:
+    Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PriSub2CIDR
+      MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub ${AWS::StackName}-PRT
-
-  DefaultPublicRoute:
+          Value: !Sub ${AWS::StackName}-prisub2
+      VpcId: !Ref VPC1
+  PriSub3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: !Ref PriSub3CIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-prisub3
+      VpcId: !Ref VPC1
+  VPC1RT1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC1
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-rt
+  #    DependsOn:
+  #      - PubSub3
+  #      - VPC1
+  #      - PubSub2
+  #      - PubSub1
+  RT1R1:
     Type: AWS::EC2::Route
-    DependsOn: InternetGatewayAttachment
     Properties:
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref VPC1RT1
+      GatewayId: !Ref VPC1IGW1
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  PublicSubnet1RouteTableAssociation:
+    DependsOn:
+      - VPCIGWAttachment
+  VPC1PrivRT1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: VPC1
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-rt
+  PubSub1RT1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet1
-
-  PublicSubnet2RouteTableAssociation:
+      SubnetId: !Ref PubSub1
+      RouteTableId: !Ref VPC1RT1
+  PubSub2RT1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet2
-
-  PublicSubnet3RouteTableAssociation:
+      SubnetId: !Ref PubSub2
+      RouteTableId: !Ref VPC1RT1
+  PubSub3RT1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
-      SubnetId: !Ref PublicSubnet3
-
-  application:
-   Type: 'AWS::EC2::SecurityGroup'
-   Properties:
-      GroupDescription: Base Security Group
+      SubnetId: !Ref PubSub3
+      RouteTableId: !Ref VPC1RT1
+  PriSub1PriRT1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PriSub1
+      RouteTableId: !Ref VPC1PrivRT1
+  PriSub2PriRT1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PriSub2
+      RouteTableId: !Ref VPC1PrivRT1
+  PriSub3PriRT1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PriSub3
+      RouteTableId: !Ref VPC1PrivRT1
+  AppSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP(s),SSH, App TCPs
+      GroupName: application
+      #      SecurityGroupEgress:
+      #        - Egress
+      # Egress by default is not needed:
+      #https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-ec2-security-group.html
       SecurityGroupIngress:
-         - IpProtocol: tcp
-           CidrIp: 0.0.0.0/0
-           FromPort: 22
-           ToPort: 22
-         - IpProtocol: tcp
-           CidrIp: 0.0.0.0/0
-           FromPort: 80
-           ToPort: 80
-         - IpProtocol: tcp
-           CidrIp: 0.0.0.0/0
-           FromPort: 443
-           ToPort: 443
-         - IpProtocol: tcp
-           CidrIp: 0.0.0.0/0
-           FromPort: 8081
-           ToPort: 8081
-      VpcId: !Ref VPC 
-  Ec2Instance: 
-   Type: AWS::EC2::Instance
-   Properties: 
-    ImageId: !Ref AMI
-    KeyName: !Ref KeyName
-    InstanceType: "t2.micro"
-    BlockDeviceMappings: 
-      - DeviceName: "/dev/sda1"
-        Ebs: 
-          VolumeType: "gp2"
-          DeleteOnTermination: "true"
-          VolumeSize: "20"
-    NetworkInterfaces:
-      - AssociatePublicIpAddress: "true"
-        DeleteOnTermination: "true"
-        SubnetId: !Ref PublicSubnet1
-        DeviceIndex: "0"
-        GroupSet:
-         - !Ref application
-    Outputs:
-        VpcId:
-          Description: The VPC ID
-          Value: !Ref VPC
-        SubnetId1:
-          Description: The Subnet ID 1
-          Value: !Ref PublicSubnet1
-        SubnetId2:
-          Description: The Subnet ID 2
-          Value: !Ref PublicSubnet2
-        SubnetId3:
-          Description: The Subnet ID 3
-          Value: !Ref PublicSubnet3
-        InternetGateway:
-          Description: Internet Gateway
-          Value: !Ref InternetGateway
-        Route:
-          Description: Route
-          Value: !Ref myRoute
-        RouteTable:
-          Description: Route Table
-          Value: !Ref PublicRouteTable
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0 #Generally this is replaced with ssh CIDR from params.
+        - IpProtocol: tcp
+          FromPort: 8081
+          ToPort: 8081
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-application-sg
+      VpcId: !Ref VPC1
+  DbSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable tcp for DB access.
+      GroupName: database
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppSG
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-database-sg
+      VpcId: !Ref VPC1
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - RDSDB
+      - S3Bucket
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "50"
+      DisableApiTermination: false
+      ImageId: !Ref AMIId
+      InstanceInitiatedShutdownBehavior: stop
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref SSHKeyName
+      Monitoring: false
+      IamInstanceProfile: !Ref S3AccessInstanceProfile
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: "true"
+          DeleteOnTermination: true
+          DeviceIndex: "0"
+          GroupSet: [!Ref AppSG]
+          SubnetId: !Ref PubSub1
+      #Either the network interface or securityGroupIds,subnetid may be set
+      #      SecurityGroupIds:
+      #        - !Ref AppSG
+      #      SecurityGroups:
+      #        - String
+      #SubnetId: !Ref PubSub1
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ec2
+      Tenancy: default
+
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          cd /home/ubuntu/workspace
+          file=application.properties
+          apt-get update -y
+          echo "spring.datasource.username=${RDSDBUserName}" >> $file
+          echo "spring.datasource.password=${RDSDBPassword}" >> $file
+          echo "spring.datasource.url=jdbc:postgresql://${RDSDB.Endpoint.Address}:${RDSDB.Endpoint.Port}/${RDSDBName}" >> $file
+          echo "aws.s3.bucketName=${S3BucketName}" >> $file
+          echo "aws.region=${AWS::Region}" >> $file
+          chmod 764 $file
+          systemctl enable --now webservice.service
+          systemctl start webservice.service
+          systemctl status webservice.service -l
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Private subnet group for the RDS instance
+      DBSubnetGroupName: DBSubnetGroup
+      SubnetIds:
+        - !Ref PriSub1
+        - !Ref PriSub2
+        #- !Ref PriSub3 # optional, only 2 needed.
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-dbSubnetGroup
+  RDSDBParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: CloudFormation webservice Postgres Parameter Group
+      Family: postgres14
+      #      Parameters:
+      #        sql_mode: IGNORE_SPACE
+      #        max_allowed_packet: 1024
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-rds-Db-ParamGroup
+
+  RDSDB:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
+    Properties:
+      DBInstanceClass: !Ref DBInstanceType
+      Engine: postgres
+      EngineVersion: 14  #Ensure this and RDSDBParameterGroup.family matches.
+      AllocatedStorage: 20
+      MultiAZ: false
+      AvailabilityZone: !Select [ 0, !GetAZs '' ] # remove if multiAZ to true
+      DBName: !Ref RDSDBName
+      MasterUsername: !Ref RDSDBUserName
+      MasterUserPassword: !Ref RDSDBPassword
+      DBInstanceIdentifier: csye6225 #the default policy is Snapshot for deletion if not mentioned
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups: #[ !Ref DbSG ]
+        - !Ref DbSG
+      Port: 5432
+      DBParameterGroupName: !Ref RDSDBParameterGroup
+      BackupRetentionPeriod: 0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-rds-postgres
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Ref S3BucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256 #'aws:kms' #AWS managed CMK
+              #KMSMasterKeyID: KMS-KEY-ARN
+            #BucketKeyEnabled: true #cheaper in kms
+      LifecycleConfiguration:
+        Rules:
+          #          - Id: MultipartUploadLifecycleRule
+          #            Status: Enabled
+          #            AbortIncompleteMultipartUpload:
+          #              DaysAfterInitiation: 1
+          - Id: Rule for all objects
+            Status: Enabled
+            #ExpirationInDays: 365
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+      #              - TransitionInDays: 90
+      #                StorageClass: GLACIER
+      #          - Id: GlacierRule
+      #            Prefix: glacier
+      #            Status: Disabled
+      #            ExpirationInDays: 365
+      #            Transitions:
+      #              - TransitionInDays: 180
+      #                StorageClass: GLACIER
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-s3-bucket
+  S3AccessInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: EC2-S3-instance-profile
+      Path: /
+      Roles:
+        - !Ref S3AccessRole
+  S3AccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: #specifies the trust policy or in simple terms who can assume this role
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: EC2 access to S3
+      #MaxSessionDuration: 1
+      Path: /
+      Policies:
+        #        - PolicyName: ListAllBuckets
+        #          PolicyDocument:
+        #            Version: "2012-10-17"
+        #            Statement:
+        #              - Effect: Allow
+        #                Action: s3:ListAllMyBuckets
+        #                Resource: arn:aws:s3:::*
+        - PolicyName: ListBucketContents
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
+      #      ManagedPolicyArns:
+      #        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+      #        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      RoleName: EC2-CSYE6225
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-ec2-s3-role
+  S3AccessRolePolicies:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: WebAppS3
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetBucketLocation
+              - s3:GetBucketTagging
+              - s3:GetObject
+              - s3:GetObjectAttributes
+              - s3:GetObjectTagging
+              - s3:PutObject
+              - s3:PutObjectTagging
+              - s3:DeleteObject
+              - s3:DeleteObjectTagging
+            Resource: #'*'
+              - !Sub 'arn:aws:s3:::${S3BucketName}'
+              - !Sub 'arn:aws:s3:::${S3BucketName}/*'
+      Roles:
+        - !Ref S3AccessRole
+Outputs:
+  EnvironmentInfo:
+    #Value: !Ref AWS::Region
+    Value: !Join [ " : ", [ !Ref AWS::Region, !Ref AWS::AccountId, !Ref AWS::StackId, !Ref AWS::StackName ] ]
+  VPC:
+    Description: The ID of the VPC
+    Value: !Ref VPC1
+    Export:
+      Name: !Sub ${AWS::StackName}-vpcid
+  PubSub1:
+    Description: The ID of the PubSub1
+    Value: !Ref PubSub1
+    Export:
+      Name: !Sub ${AWS::StackName}-pubsub1
+  PubSub2:
+    Description: The ID of the PubSub2
+    Value: !Ref PubSub2
+    Export:
+      Name: !Sub ${AWS::StackName}-pubsub2
+  PubSub3:
+    Description: The ID of the PubSub3
+    Value: !Ref PubSub3
+    Export:
+      Name: !Sub ${AWS::StackName}-pubsub3
+  PrivateSubnets:
+    Description: The list of private subnets
+    Value: !Join [ ",", [ !Ref PriSub1, !Ref PriSub2, !Ref PriSub3 ]]
+    Export:
+      Name: !Sub ${AWS::StackName}-private-subnets
+  Ec2Id:
+    Description: The ID of the EC2 launched by template
+    Value: !Ref EC2Instance
+    Export:
+      Name: !Sub ${AWS::StackName}-ec2
+  EndpointAddress:
+    Description: Address of the RDS endpoint.
+    Value: !GetAtt 'RDSDB.Endpoint.Address'
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'EndpointAddress' ] ]
+  EndpointPort:
+    Description: Port of the RDS endpoint.
+    Value: !GetAtt 'RDSDB.Endpoint.Port'
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'EndpointPort' ] ]
+  DBName:
+    Description: The name of the database that is created within the PostgreSQL instance.
+    Value: !Ref RDSDBName
+    Export:
+      Name: !Join [ ':', [ !Ref 'AWS::StackName', 'DBName' ] ]
+  BucketName:
+    Description: s3 bucket for use by ec2.
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub ${AWS::StackName}-s3bucket
