@@ -62,8 +62,9 @@ Parameters:
     Default: 10.0.6.0/24
     Description: IP range(CIDR) for PrivateSub3
     Type: String
+
   AMIId:
-    Default: ami-05eb93aa9a958d203
+    Default: ami-04b7b66371115d868
     Description: ImageId of webservice-AMI. Default one is Ubuntu 22.04 LTS AMI.
     Type: String
   InstanceType:
@@ -71,11 +72,11 @@ Parameters:
     Description: Type of Ec2 being launched
     Type: String
   SSHKeyName:
-    Default: chandu-dev-test
+    Default: chandu-demo-test
     Description: SSH key name to log into aws ec2
     Type: String
   S3BucketName:
-    Default: csye6225-demo-chandu
+    Default: csye6225-demo-chand
     Description: S3 bucket required for webapp
     Type: String
   RDSDBName:
@@ -93,6 +94,9 @@ Parameters:
   DBInstanceType:
     Default: db.t3.micro
     Description: Type of RDS DB being launched
+    Type: String
+  environment:
+    Description: "Environment"
     Type: String
 Resources:
   VPC1:
@@ -184,11 +188,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-rt
-  #    DependsOn:
-  #      - PubSub3
-  #      - VPC1
-  #      - PubSub2
-  #      - PubSub1
   RT1R1:
     Type: AWS::EC2::Route
     Properties:
@@ -304,12 +303,6 @@ Resources:
           DeviceIndex: "0"
           GroupSet: [!Ref AppSG]
           SubnetId: !Ref PubSub1
-      #Either the network interface or securityGroupIds,subnetid may be set
-      #      SecurityGroupIds:
-      #        - !Ref AppSG
-      #      SecurityGroups:
-      #        - String
-      #SubnetId: !Ref PubSub1
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-ec2
@@ -330,6 +323,7 @@ Resources:
           systemctl enable --now webservice.service
           systemctl start webservice.service
           systemctl status webservice.service -l
+          iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-ports 8081
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -407,15 +401,7 @@ Resources:
             Transitions:
               - TransitionInDays: 30
                 StorageClass: STANDARD_IA
-      #              - TransitionInDays: 90
-      #                StorageClass: GLACIER
-      #          - Id: GlacierRule
-      #            Prefix: glacier
-      #            Status: Disabled
-      #            ExpirationInDays: 365
-      #            Transitions:
-      #              - TransitionInDays: 180
-      #                StorageClass: GLACIER
+
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-s3-bucket
@@ -442,13 +428,6 @@ Resources:
       #MaxSessionDuration: 1
       Path: /
       Policies:
-        #        - PolicyName: ListAllBuckets
-        #          PolicyDocument:
-        #            Version: "2012-10-17"
-        #            Statement:
-        #              - Effect: Allow
-        #                Action: s3:ListAllMyBuckets
-        #                Resource: arn:aws:s3:::*
         - PolicyName: ListBucketContents
           PolicyDocument:
             Version: "2012-10-17"
@@ -456,9 +435,6 @@ Resources:
               - Effect: Allow
                 Action: s3:ListBucket
                 Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
-      #      ManagedPolicyArns:
-      #        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
-      #        - arn:aws:iam::aws:policy/AmazonS3FullAccess
       RoleName: EC2-CSYE6225
       Tags:
         - Key: Name
@@ -486,6 +462,15 @@ Resources:
               - !Sub 'arn:aws:s3:::${S3BucketName}/*'
       Roles:
         - !Ref S3AccessRole
+  myDNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneName: !Join ['.', [!Ref environment, 'saichandghanta','me.']]
+      Name: !Join ['.', [!Ref environment, 'saichandghanta','me.']]
+      ResourceRecords:
+        - !GetAtt EC2Instance.PublicIp
+      TTL: 60
+      Type: A
 Outputs:
   EnvironmentInfo:
     #Value: !Ref AWS::Region
@@ -540,3 +525,8 @@ Outputs:
     Value: !Ref S3Bucket
     Export:
       Name: !Sub ${AWS::StackName}-s3bucket
+  PublicIp:
+    Description: public IP use by ec2.
+    Value: !GetAtt 'EC2Instance.PublicIp'
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicIP
