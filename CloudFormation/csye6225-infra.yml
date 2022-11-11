@@ -64,7 +64,7 @@ Parameters:
     Type: String
 
   AMIId:
-    Default: ami-04b7b66371115d868
+    Default: ami-0384a48e1ee6d87fa
     Description: ImageId of webservice-AMI. Default one is Ubuntu 22.04 LTS AMI.
     Type: String
   InstanceType:
@@ -72,11 +72,11 @@ Parameters:
     Description: Type of Ec2 being launched
     Type: String
   SSHKeyName:
-    Default: chandu-demo-test
+    Default: chandu-dev-test
     Description: SSH key name to log into aws ec2
     Type: String
   S3BucketName:
-    Default: csye6225-demo-chand
+    Default: csye6225-dev-chandu
     Description: S3 bucket required for webapp
     Type: String
   RDSDBName:
@@ -436,6 +436,8 @@ Resources:
                 Action: s3:ListBucket
                 Resource: !Sub 'arn:aws:s3:::${S3BucketName}'
       RoleName: EC2-CSYE6225
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-ec2-s3-role
