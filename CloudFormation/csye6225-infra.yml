@@ -64,7 +64,7 @@ Parameters:
     Type: String
 
   AMIId:
-    Default: ami-0384a48e1ee6d87fa
+    Default: ami-07dede0d1519e6cca
     Description: ImageId of webservice-AMI. Default one is Ubuntu 22.04 LTS AMI.
     Type: String
   InstanceType:
@@ -72,11 +72,15 @@ Parameters:
     Description: Type of Ec2 being launched
     Type: String
   SSHKeyName:
-    Default: chandu-dev-test
+    Default: chandu-demo-test
     Description: SSH key name to log into aws ec2
     Type: String
+  DomainName:
+    Default: demo.saichandghanta.me
+    Description: DomainName required for webapp:s3bucket,route53
+    Type: String
   S3BucketName:
-    Default: csye6225-dev-chandu
+    Default: csye6225-demo-chandu
     Description: S3 bucket required for webapp
     Type: String
   RDSDBName:
@@ -95,7 +99,12 @@ Parameters:
     Default: db.t3.micro
     Description: Type of RDS DB being launched
     Type: String
+  LambdaDefaultJar:
+    Description: Jar name in s3 bucket, which will be used by lambda initially.
+    Type: String
+    Default: serverless-1.0-SNAPSHOT.jar
   environment:
+    Default: demo
     Description: "Environment"
     Type: String
 Resources:
@@ -319,6 +328,8 @@ Resources:
           echo "spring.datasource.url=jdbc:postgresql://${RDSDB.Endpoint.Address}:${RDSDB.Endpoint.Port}/${RDSDBName}" >> $file
           echo "aws.s3.bucketName=${S3BucketName}" >> $file
           echo "aws.region=${AWS::Region}" >> $file
+          echo "aws.dynamodb.url=dynamodb.${AWS::Region}.amazonaws.com" >> $file
+          echo "aws.sns.topicArn=${WebserviceSNS}" >> $file
           chmod 764 $file
           systemctl enable --now webservice.service
           systemctl start webservice.service
@@ -438,9 +449,125 @@ Resources:
       RoleName: EC2-CSYE6225
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+        - arn:aws:iam::aws:policy/AmazonSNSFullAccess
       Tags:
         - Key: Name
           Value: !Sub ${AWS::StackName}-ec2-s3-role
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: "UserToken"
+      AttributeDefinitions:
+        - AttributeName: "email"
+          AttributeType: "S"
+      #        - AttributeName: "token"
+      #          AttributeType: "S"
+      #        - AttributeName: "tokenTtl"
+      #          AttributeType: "N"
+      KeySchema:
+        - AttributeName: "email"
+          KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: "5"
+        WriteCapacityUnits: "5"
+      #      SSESpecification: Only KMS is supported. skipping
+      TimeToLiveSpecification:
+        AttributeName: tokenTtl
+        Enabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-dynamodb
+  WebserviceSNS:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: webservice-sns
+      TopicName: webservice-sns
+      Subscription:
+        - Endpoint:
+            Fn::GetAtt:
+              - WebservicerLambda
+              - Arn
+          Protocol: "lambda"
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-sns
+  SNSLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:*
+      FunctionName: !GetAtt WebservicerLambda.Arn
+      SourceArn: !Ref WebserviceSNS
+      Principal: sns.amazonaws.com
+  WebservicerLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: SendRegistrationMail
+      MemorySize: 512
+      Runtime: java11
+      Timeout: 120 #default:3 very less for java
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-lambda
+      Code:
+        S3Bucket: 'gscserverless'
+        S3Key: !Ref LambdaDefaultJar
+      Handler: edu.neu.csye6225.serverless.SNSLogger::handleRequest
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          DOMAIN_NAME: !Ref DomainName
+          REGION: !Sub ${AWS::Region}
+          DYNAMO_DB_TABLE: !GetAtt DynamoDBTable.Arn
+          DYNAMO_DB: !Sub dynamodb.${AWS::Region}.amazonaws.com
+    #      VpcConfig:
+    #        SubnetIds:
+    #          - !Ref PubSub1
+    #          - !Ref PubSub2
+    #          - !Ref PubSub3
+    #        SecurityGroupIds:
+    #          - !Ref AppSG
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument: #specifies the trust policy or in simple terms who can assume this role
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: Lambda access to s3,sns,dynamo,sendgrid
+      Path: /
+      RoleName: !Sub LambdaExecutionRoleRole-${AWS::StackName}
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+        - "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
+        - "arn:aws:iam::aws:policy/AmazonSESFullAccess"
+        - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-CodeDeployEC2ServiceRole
+  LambdaCloudwatchAccessPolicies:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: LambdaLogsCloudwatchPolicy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - arn:aws:logs:*:*:*
+            Sid: LambdaCreatePutLogs
+      Roles:
+        - !Ref LambdaExecutionRole
   S3AccessRolePolicies:
     Type: "AWS::IAM::Policy"
     Properties:
