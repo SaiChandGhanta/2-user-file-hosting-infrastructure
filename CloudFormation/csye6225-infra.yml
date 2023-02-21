@@ -87,11 +87,11 @@ Parameters:
     Description: Database name in the RDS DB
     Type: String
   RDSDBUserName:
-    Default: csye6225
+    Default: username
     Description: Database master user name in the RDS DB
     Type: String
   RDSDBPassword:
-    Default: csye6225
+    Default: password
     Description: Database master password in the RDS DB
     Type: String
   DBInstanceType:
@@ -99,7 +99,7 @@ Parameters:
     Description: Type of RDS DB being launched
     Type: String
   HostedZoneID:
-    Default: Z0475588ULXTMWWGY3I
+    Default: Z0475588ULXYZWWGQWER
     Description: Route53 Zone Id corresponding to domain name"
     Type: String
   LambdaDefaultJar:
@@ -113,7 +113,7 @@ Parameters:
   CertificateARN:
     Description: SSL certificate arn for the domain.Can be found in ACM. Default dev
     Type: String
-    Default: arn:aws:acm:us-east-1:562996519735:certificate/5ac81123-8275-45e1-acd6-4cb123c80cfa
+    Default: arn:aws:acm:us-east-1:***:certificate/***
 Resources:
   VPC1:
     Type: AWS::EC2::VPC
